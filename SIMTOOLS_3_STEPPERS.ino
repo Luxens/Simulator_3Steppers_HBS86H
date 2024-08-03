@@ -55,9 +55,15 @@ uint16_t current_x = 0;
 uint16_t current_y = 0;
 uint16_t current_z = 0;
 uint16_t x, y, z;
-volatile bool autoHoming = true;
+bool prevDir1 = 1;
+bool prevDir2 = 1;
+bool prevDir3 = 1;
+uint16_t xRamp = 0;
+uint16_t yRamp = 0;
+uint16_t zRamp = 0;
+bool autoHoming = true;
 uint8_t homingState = 0;
-
+ 
 void setup() {
   delay(2000);  //safety delay to flash the code
   pinMode(STEP_PIN1, OUTPUT);
@@ -102,34 +108,31 @@ void setup() {
 
 void loop() {
   SerialReader();  //Get the datas from Simtools
-  LimitManager();
-  CommandWorker();                                      //Convert the position targets to pulse number
-  MoveSteppers(stepPulses1, stepPulses2, stepPulses3);  //Set directions and send the pulses.
-  delayMicroseconds(2137); // Dont know why, but this delay must be here
-}
-
-void MoveSteppers(int Step1, int Step2, int Step3) 
-{
-  x = abs(Step1);
-  y = abs(Step2);
-  z = abs(Step3);
-  DirectionManager(Step1, Step2, Step3);  //put the motors in the right directions
-  current_x_speed = speedStart;
-  current_y_speed = speedStart;
-  current_z_speed = speedStart;
+  TargetDelta();                                      //Convert the position targets to pulse number
+  x = abs(stepPulses1);
+  y = abs(stepPulses2);
+  z = abs(stepPulses3);
   current_x = 0;
   current_y = 0;
   current_z = 0;
-
-  while(x > current_x || y > current_y || z > current_z)
-  {   
-    
+  DirectionManager(stepPulses1, stepPulses2, stepPulses3);  //put the motors in the right directions
+  while(!Serial.available())
+  {
     if(current_x < x)
     {
       pulseWidth = current_x_speed;
       monoPulse(STEP_PIN1);
       current_x ++;
-      current_x_speed = speedNormal + speedStart*(1 - constrain(current_x/ramp_pulses, 0, 1));
+      current_x_speed = speedNormal + speedStart*(1 - constrain(xRamp/ramp_pulses, 0, 1));
+      xRamp ++;
+      if(stepPulses1 > 0)
+      {
+        motor1Position ++;
+      }
+      else
+      {
+        motor1Position --;
+      }
     }
     
     if(current_y < y)
@@ -137,24 +140,95 @@ void MoveSteppers(int Step1, int Step2, int Step3)
       pulseWidth = current_y_speed;
       monoPulse(STEP_PIN2);
       current_y ++;
-      current_y_speed = speedNormal + speedStart*(1 - constrain(current_y/ramp_pulses, 0, 1));
+      current_y_speed = speedNormal + speedStart*(1 - constrain(yRamp/ramp_pulses, 0, 1));
+      yRamp ++;
+      if(stepPulses2 > 0)
+      {
+        motor2Position ++;
+      }
+      else
+      {
+        motor2Position --;
+      }
     }
     if(current_z < z)
     {
       pulseWidth = current_z_speed;
       monoPulse(STEP_PIN3);
       current_z ++;
-      current_z_speed = speedNormal + speedStart*(1 - constrain(current_z/(ramp_pulses*1.5), 0, 1));
+      current_z_speed = speedNormal + speedStart*(1 - constrain(zRamp/(ramp_pulses*1.5), 0, 1));
+      zRamp ++;
+      if(stepPulses3 > 0)
+      {
+        motor3Position ++;
+      }
+      else
+      {
+        motor3Position --;
+      }
     }
     
+    
+    }
+    if(x <= 1)
+    {
+      xRamp = 0;
+    }
+    if(y <= 1)
+    {
+      yRamp = 0;
+    }
+    if(z <= 1)
+    {
+      zRamp = 0;
+    }
+    delayMicroseconds(2137 - 420); //dont know why but delay is necessary here
+ }
+
+void DirectionManager(int Step1, int Step2, int Step3) {
+  if (Step1 < 0) {  //DIR_PIN1 = 3
+    digitalWrite(DIR_PIN1, LOW);
+    // PORTD &= B11110111;        // This code is faster than ;
+  } else {
+    digitalWrite(DIR_PIN1, HIGH);  //
+                                   // PORTD |= B00001000;
   }
 
-  motor1Position = motor1Target;
-  motor2Position = motor2Target;
-  motor3Position = motor3Target;
+  if (Step2 < 0) {
+    digitalWrite(DIR_PIN2, LOW);
+  } else {
+    digitalWrite(DIR_PIN2, HIGH);
+  }
+
+  if (Step3 < 0) {
+    digitalWrite(DIR_PIN3, LOW);
+  } else {
+    digitalWrite(DIR_PIN3, HIGH);
+  }
+
+  if((prevDir1 and stepPulses1 < 0) or (!prevDir1 and stepPulses1 > 0))
+  {
+    current_x_speed = speedNormal + speedStart;
+    prevDir1 = !prevDir1;
+    xRamp = 0;
+  }
+  if((prevDir2 and stepPulses2 < 0) or (!prevDir2 and stepPulses2 > 0))
+  {
+    current_y_speed = speedNormal + speedStart;
+    prevDir2 = !prevDir2;
+    yRamp = 0;
+  }
+  if((prevDir3 and stepPulses3 < 0) or (!prevDir3 and stepPulses3 > 0))
+  {
+    current_z_speed = speedNormal + speedStart;
+    prevDir3 = !prevDir3;
+    zRamp = 0;
+  }
+  delayMicroseconds(5);
 }
 
-void CommandWorker() {
+void TargetDelta() {
+  Limiter();
   stepPulses1 = motor1Target - motor1Position;
   stepPulses2 = motor2Target - motor2Position;
   stepPulses3 = motor3Target - motor3Position;
@@ -205,30 +279,7 @@ bool findString(const char *target, int length) {
   return false;
 }
 
-void DirectionManager(int Step1, int Step2, int Step3) {
-  if (Step1 < 0) {  //DIR_PIN1 = 3
-    digitalWrite(DIR_PIN1, LOW);
-    // PORTD &= B11110111;        // This code is faster than ;
-  } else {
-    digitalWrite(DIR_PIN1, HIGH);  //
-                                   // PORTD |= B00001000;
-  }
-
-  if (Step2 < 0) {
-    digitalWrite(DIR_PIN2, LOW);
-  } else {
-    digitalWrite(DIR_PIN2, HIGH);
-  }
-
-  if (Step3 < 0) {
-    digitalWrite(DIR_PIN3, LOW);
-  } else {
-    digitalWrite(DIR_PIN3, HIGH);
-  }
-  delayMicroseconds(5);
-}
-
-void LimitManager() {
+void Limiter() {
 
   if (motor1Target > motor1Max) {
     motor1Target = motor1Max;
@@ -239,6 +290,52 @@ void LimitManager() {
   if (motor3Target > motor3Max) {
     motor3Target = motor3Max;
   }
+}
+
+void MoveSteppers(int Step1, int Step2, int Step3) 
+{
+  x = abs(Step1);
+  y = abs(Step2);
+  z = abs(Step3);
+  DirectionManager(Step1, Step2, Step3);  //put the motors in the right directions
+  current_x_speed = speedStart;
+  current_y_speed = speedStart;
+  current_z_speed = speedStart;
+  current_x = 0;
+  current_y = 0;
+  current_z = 0;
+
+  while(x > current_x || y > current_y || z > current_z)
+  {   
+    
+    if(current_x < x)
+    {
+      pulseWidth = current_x_speed;
+      monoPulse(STEP_PIN1);
+      current_x ++;
+      current_x_speed = speedNormal + speedStart*(1 - constrain(current_x/ramp_pulses, 0, 1));
+    }
+    
+    if(current_y < y)
+    {
+      pulseWidth = current_y_speed;
+      monoPulse(STEP_PIN2);
+      current_y ++;
+      current_y_speed = speedNormal + speedStart*(1 - constrain(current_y/ramp_pulses, 0, 1));
+    }
+    if(current_z < z)
+    {
+      pulseWidth = current_z_speed;
+      monoPulse(STEP_PIN3);
+      current_z ++;
+      current_z_speed = speedNormal + speedStart*(1 - constrain(current_z/(ramp_pulses*1.5), 0, 1));
+    }
+    
+  }
+
+  motor1Position = motor1Target;
+  motor2Position = motor2Target;
+  motor3Position = motor3Target;
 }
 
 void homingInterupt() {
@@ -283,7 +380,7 @@ void homing() {
           } else {
             motor1Max = motor1Position;
             motor1Target = (motor1Max / 2)-1;
-            CommandWorker();
+            TargetDelta();
             MoveSteppers(stepPulses1, 0, 0);
             homingState++;
             pulseWidth = speedHoming;
@@ -311,7 +408,7 @@ void homing() {
           } else {
             motor2Max = motor2Position;
             motor2Target = (motor2Max / 2) - 1;
-            CommandWorker();
+            TargetDelta();
             MoveSteppers(0, stepPulses2, 0);
             homingState++;
             pulseWidth = speedHoming;
@@ -339,7 +436,7 @@ void homing() {
           } else {
             motor3Max = motor3Position;
             motor3Target = (motor3Max / 2) - 1;
-            CommandWorker();
+            TargetDelta();
             MoveSteppers(0, 0, stepPulses3);
             homingState++;
             delay(100);
