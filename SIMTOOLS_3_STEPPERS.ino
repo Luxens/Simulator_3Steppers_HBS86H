@@ -2,7 +2,6 @@
 
 #include <Wire.h>
 #include "PCF8574.h"
-// #include <LiquidCrystal_I2C.h>
 
 #define ENDSTOPS_INTERUPT_PIN 2
 #define SHUTDOWN_INTERUPT_PIN 3
@@ -15,7 +14,6 @@
 #define STEP_PIN3 10
 #define DIR_PIN3 11
 #define ENABLE_PIN3 12
-// LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 PCF8574 endstops;
 int endstopsState[6] = { 1 };
@@ -47,8 +45,8 @@ uint16_t motor1Max = stepperMax, motor2Max = stepperMax, motor3Max = stepperMax;
 const uint8_t speedNormal = 15;    //us for steps delay
 const uint8_t speedHoming = 100;   //us for steps delay
 const uint8_t speedShutdown = 50;  //us for steps delay
-const uint8_t speedStart = 65;
-const uint8_t ramp_pulses = uint8_t (0.08*stepperPulses);
+const uint8_t speedStart = 55;
+const uint8_t ramp_pulses = uint8_t (0.10*stepperPulses);
 uint8_t pulseWidth = speedNormal;     //From the HBS86h datasheet : For reliable response, pulse width should be longer than 10μs
 uint8_t current_x_speed = speedStart;
 uint8_t current_y_speed = speedStart;
@@ -72,9 +70,6 @@ void setup() {
   pinMode(DIR_PIN3, OUTPUT);
   pinMode(ENABLE_PIN3, OUTPUT);
 
-  // lcd.begin();
-  // lcd.backlight();
-  // lcd.print("Setup");
   void homingInterupt();
   void shutdown();
   endstops.begin(0x20);
@@ -103,29 +98,18 @@ void setup() {
   if (autoHoming) {
     homing();
   }
-  // delay(1000);
-  // digitalWrite(ENABLE_PIN1, HIGH); // enable motors
-  // digitalWrite(ENABLE_PIN2, HIGH);
-  // digitalWrite(ENABLE_PIN3, HIGH);
 }
 
 void loop() {
   SerialReader();  //Get the datas from Simtools
-  // lcd.clear();
-  // lcd.print("Pos:");
-  // lcd.setCursor(6, 0);
-  // lcd.print("Tar:");
-  // lcd.setCursor(0, 1);
-  // lcd.print(motor1Position);
-  // lcd.setCursor(6, 1);
-  // lcd.print(motor1Target);
   LimitManager();
   CommandWorker();                                      //Convert the position targets to pulse number
   MoveSteppers(stepPulses1, stepPulses2, stepPulses3);  //Set directions and send the pulses.
-  delayMicroseconds(2137);
+  delayMicroseconds(2137); // Dont know why, but this delay must be here
 }
 
-void MoveSteppers(int Step1, int Step2, int Step3) {
+void MoveSteppers(int Step1, int Step2, int Step3) 
+{
   x = abs(Step1);
   y = abs(Step2);
   z = abs(Step3);
@@ -136,24 +120,6 @@ void MoveSteppers(int Step1, int Step2, int Step3) {
   current_x = 0;
   current_y = 0;
   current_z = 0;
-  // Serial.print("Step1: ");
-  // Serial.print(Step1);
-  // Serial.print(" ");
-  // Serial.print("Step2: ");
-  // Serial.print(Step2);
-  // Serial.print(" ");
-  // Serial.print("Step3: ");
-  // Serial.print(Step3);
-  // Serial.println("");
-  // Serial.print("x: ");
-  // Serial.print(x);
-  // Serial.print(" ");
-  // Serial.print("y: ");
-  // Serial.print(x);
-  // Serial.print(" ");
-  // Serial.print("y: ");
-  // Serial.print(z);
-  // Serial.println("");
 
   while(x > current_x || y > current_y || z > current_z)
   {   
@@ -186,70 +152,12 @@ void MoveSteppers(int Step1, int Step2, int Step3) {
   motor1Position = motor1Target;
   motor2Position = motor2Target;
   motor3Position = motor3Target;
-  // for (int i = 0; i < min(min(x, y), z); i++) {  //Common moves
-  //   triplePulse(STEP_PIN1, STEP_PIN2, STEP_PIN3);
-  // }
-
-  // if (x > z && y > z) {
-  //   for (int i = 0; i < min(x, y); i++) {  //Common moves
-  //     doublePulse(STEP_PIN1, STEP_PIN2);
-  //   }
-  // }
-
-  // if (x > y && z > y) {
-  //   for (int i = 0; i < min(x, z); i++) {  //Common moves
-  //     doublePulse(STEP_PIN1, STEP_PIN3);
-  //   }
-  // }
-
-  // if (y > x && z > x) {
-  //   for (int i = 0; i < min(y, z); i++) {  //Common moves
-  //     doublePulse(STEP_PIN2, STEP_PIN3);
-  //   }
-  // }
-
-  // if (max(max(x, y), z) == x) {  //Now only M1 will move
-  //   for (int i = 0; i < x - y - z; i++) {
-  //     monoPulse(STEP_PIN1);
-  //   }
-  // }
-
-  // if (max(max(x, y), z) == y) {  //Now only M2 will move
-  //   for (int i = 0; i < y - x - z; i++) {
-  //     monoPulse(STEP_PIN2);
-  //   }
-  // }
-
-  // else  //Now only M3 will move
-  // {
-  //   for (int i = 0; i < z - x - y; i++) {
-  //     monoPulse(STEP_PIN3);
-  //   }
-  // }
 }
 
 void CommandWorker() {
   stepPulses1 = motor1Target - motor1Position;
   stepPulses2 = motor2Target - motor2Position;
   stepPulses3 = motor3Target - motor3Position;
-  // Serial.print("stepPulses1 ");
-  // Serial.print(motor1Target);
-  // Serial.print(" ");
-  // Serial.print(motor1Position);
-  // Serial.print(" ");
-  // Serial.println(stepPulses1);
-  // Serial.print("stepPulses2 ");
-  // Serial.print(motor2Target);
-  // Serial.print(" ");
-  // Serial.print(motor2Position);
-  // Serial.print(" ");
-  // Serial.println(stepPulses2);
-  // Serial.print("stepPulses3 ");
-  // Serial.print(motor3Target);
-  // Serial.print(" ");
-  // Serial.print(motor3Position);
-  // Serial.print(" ");
-  // Serial.println(stepPulses3);
 }
 
 void monoPulse(int StepPin) {
@@ -259,34 +167,14 @@ void monoPulse(int StepPin) {
   delayMicroseconds(pulseWidth);
 }
 
-void doublePulse(int StepPin1, int StepPin2) {
-  digitalWrite(StepPin1, HIGH);
-  digitalWrite(StepPin2, HIGH);
-  delayMicroseconds(pulseWidth);
-  digitalWrite(StepPin1, LOW);
-  digitalWrite(StepPin2, LOW);
-  delayMicroseconds(pulseWidth);
-}
-
-void triplePulse(int StepPin1, int StepPin2, int StepPin3) {
-  digitalWrite(StepPin1, HIGH);
-  digitalWrite(StepPin2, HIGH);
-  digitalWrite(StepPin3, HIGH);
-  delayMicroseconds(pulseWidth);
-  digitalWrite(StepPin1, LOW);
-  digitalWrite(StepPin2, LOW);
-  digitalWrite(StepPin3, LOW);
-  delayMicroseconds(pulseWidth);
-}
-
 void SerialReader() {
   while(Serial.available() > 0) {
-    if (findString(startMarker, startMarkerLength)) { // Sprawdź, czy pojawił się znacznik START
+    if (findString(startMarker, startMarkerLength)) { // Find START marker
       Serial.readBytes(axis1, dataLength);
       Serial.readBytes(axis2, dataLength);
       Serial.readBytes(axis3, dataLength);
       if (findString(stopMarker, stopMarkerLength)) {
-        // Konwersja danych z osi na wartości liczbowe
+        // Decode data
         motor1Target = (axis1[0] << 8) | axis1[1];
         motor2Target = (axis2[0] << 8) | axis2[1];
         motor3Target = (axis3[0] << 8) | axis3[1];
@@ -311,47 +199,11 @@ bool findString(const char *target, int length) {
         return true;
       }
     } else {
-      index = 0; // Resetuj indeks, jeśli znak nie pasuje
+      index = 0; // Index reset
     }
   }
   return false;
 }
-// void SerialReader() {  // This function is the work of Sirnoname
-//   // Simtools output : P<Axis1a><Axis2a><Axis3a>, Data bits : 15 bits, Parity : None, stop bits : 1
-//   int Buffer = 0;        // It takes the value of the serial data
-//   int BufferCount = -1;  // To count where we are in the serial datas
-
-//   while (Serial.available()) {
-//     if (BufferCount == -1) {
-//       Buffer = Serial.read();
-//       delayMicroseconds(100);
-//       if (Buffer != 'P') {
-//         BufferCount = -1;  // "P" is the marquer. If we read P, the next data is pitch
-//       } else {
-//         BufferCount = 0;
-//       }
-//     } else  //  if(BufferCount>=0)
-//     {
-//       Buffer = Serial.read();
-//       delayMicroseconds(100);
-//       commandBuffer[BufferCount] = Buffer;  // The first value next to "P" is saved in commandBuffer in the place "BufferCount"
-//       BufferCount++;
-//       if (BufferCount > 5) {
-//         motor1Target = (commandBuffer[0]) * 256 + commandBuffer[1];
-//         motor2Target = (commandBuffer[2]) * 256 + commandBuffer[3];
-//         motor3Target = (commandBuffer[4]) * 256 + commandBuffer[5];
-//         // Serial.print("Pitch: ");
-//         // Serial.println(motor1Target);
-//         // Serial.print("Roll: ");
-//         // Serial.println(motor2Target);
-//         // Serial.print("Yaw: ");
-//         // Serial.println(motor3Target);
-//         BufferCount = -1;  // Re-initialize BufferCount.
-//         break;
-//       }
-//     }
-//   }
-// }
 
 void DirectionManager(int Step1, int Step2, int Step3) {
   if (Step1 < 0) {  //DIR_PIN1 = 3
@@ -398,7 +250,6 @@ void homingInterupt() {
     endstopsState[i] = endstops.digitalRead(i);
   }
   inInterupt = false;
-  //printEndstopsState();
   attachInterrupt(digitalPinToInterrupt(ENDSTOPS_INTERUPT_PIN), homingInterupt, FALLING);
 }
 
@@ -411,8 +262,6 @@ void printEndstopsState()
   Serial.println("");
 }
 void homing() {
-  // Serial.print("Homing start: ");
-  // Serial.println(homingState);
   pulseWidth = speedHoming;
   while (homingState < 6) {
 
@@ -425,7 +274,6 @@ void homing() {
             motor1Position = 0;
             homingState++;
           }
-          //Serial.println("case 0");
           break;
       case 1:
           if (endstopsState[1] == 1) {
@@ -445,7 +293,6 @@ void homing() {
             digitalWrite(ENABLE_PIN1, HIGH);
             delay(1000);
           }
-          //Serial.println("case 1");
           break;
       case 2:
           if (endstopsState[2] == 1) {
@@ -455,7 +302,6 @@ void homing() {
             motor2Position = 0;
             homingState++;
           }
-          //Serial.println("case 2");
           break;
       case 3:
           if (endstopsState[3] == 1) {
@@ -475,7 +321,6 @@ void homing() {
             digitalWrite(ENABLE_PIN2, HIGH);
             delay(1000);
           }
-          //Serial.println("case 3");
           break;
       case 4:
           if (endstopsState[4] == 1) {
@@ -485,7 +330,6 @@ void homing() {
             motor3Position = 0;
             homingState++;
           }
-          //Serial.println("case 4");
           break;
       case 5:
           if (endstopsState[5] == 1) {
@@ -504,16 +348,10 @@ void homing() {
             digitalWrite(ENABLE_PIN3, HIGH);
             delay(1000);
           }
-          //Serial.println("case 5");
           break;
     }
   }
-  // Serial.print("Homing end: ");
-  // Serial.println(homingState);
   pulseWidth = speedNormal;
-  // Serial.println(motor1Max);
-  // Serial.println(motor2Max);
-  // Serial.println(motor3Max);
 }
 
 void shutdown() {
@@ -525,48 +363,5 @@ void shutdown() {
       digitalWrite(ENABLE_PIN1, LOW);
       digitalWrite(ENABLE_PIN2, LOW);
       digitalWrite(ENABLE_PIN3, LOW);
-      //Serial.println("Shutdown");
     }
-  // if (inShutdown && digitalRead(SHUTDOWN_INTERUPT_PIN) == LOW)
-  //   {
-  //     Serial.println("Shutdown 1");
-  //     return;
-  //   }
-  // if (inShutdown && digitalRead(SHUTDOWN_INTERUPT_PIN) == HIGH && homingState >= 6)
-  // {
-  //   inShutdown = false;
-  //   digitalWrite(ENABLE_PIN1, HIGH); // enable motors
-  //   digitalWrite(ENABLE_PIN2, HIGH);
-  //   digitalWrite(ENABLE_PIN3, HIGH);
-  //   Serial.println("Shutdown 2");
-  //   return;
-  // } 
-
-  // if (inShutdown && digitalRead(SHUTDOWN_INTERUPT_PIN) == LOW && homingState < 6)
-  // {
-  //   Serial.println("Shutdown 3");
-  //   inShutdown = true;
-  //   digitalWrite(ENABLE_PIN1, LOW);
-  //   digitalWrite(ENABLE_PIN2, LOW);
-  //   digitalWrite(ENABLE_PIN3, LOW);
-  //   return;
-  // } 
-  
-  // if (inShutdown && digitalRead(SHUTDOWN_INTERUPT_PIN) == LOW && homingState >= 6)
-  // {
-  //   Serial.println("Shutdown 4");
-  //   inShutdown = true;
-  //   pulseWidth = speedShutdown;
-  //   motor1Target = motor1Max / 2;
-  //   motor2Target = motor2Max / 2;
-  //   motor3Target = motor3Max / 2;
-  //   CommandWorker();
-  //   MoveSteppers(stepPulses1, stepPulses2, stepPulses3);
-  //   digitalWrite(ENABLE_PIN1, LOW);
-  //   digitalWrite(ENABLE_PIN2, LOW);
-  //   digitalWrite(ENABLE_PIN3, LOW);
-  //   pulseWidth = speedNormal;
-  //   return;
-  // } 
-
 }
