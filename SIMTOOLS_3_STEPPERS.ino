@@ -2,13 +2,14 @@
 
 #include <Wire.h>
 #include "PCF8574.h"
-
+//PORTD
 #define ENDSTOPS_INTERUPT_PIN 2
 #define SHUTDOWN_INTERUPT_PIN 3
 #define STEP_PIN1 4
 #define DIR_PIN1 5
 #define ENABLE_PIN1 6
 #define STEP_PIN2 7
+//PORTB
 #define DIR_PIN2 8
 #define ENABLE_PIN2 9
 #define STEP_PIN3 10
@@ -66,15 +67,19 @@ uint8_t homingState = 0;
  
 void setup() {
   delay(2000);  //safety delay to flash the code
-  pinMode(STEP_PIN1, OUTPUT);
-  pinMode(DIR_PIN1, OUTPUT);
-  pinMode(ENABLE_PIN1, OUTPUT);
-  pinMode(STEP_PIN2, OUTPUT);
-  pinMode(DIR_PIN2, OUTPUT);
-  pinMode(ENABLE_PIN2, OUTPUT);
-  pinMode(STEP_PIN3, OUTPUT);
-  pinMode(DIR_PIN3, OUTPUT);
-  pinMode(ENABLE_PIN3, OUTPUT);
+  DDRD |=0b11110000;
+  DDRB |=0b00011111;
+  //slower port manipulation
+  // pinMode(STEP_PIN1, OUTPUT);
+  // pinMode(DIR_PIN1, OUTPUT);
+  // pinMode(ENABLE_PIN1, OUTPUT);
+  // pinMode(STEP_PIN2, OUTPUT);
+  // pinMode(DIR_PIN2, OUTPUT);
+  // pinMode(ENABLE_PIN2, OUTPUT);
+  // pinMode(STEP_PIN3, OUTPUT);
+  // pinMode(DIR_PIN3, OUTPUT);
+  // pinMode(ENABLE_PIN3, OUTPUT);
+  //C port manipulation
   DDRC &= ~0b00000111;
   PORTC |= 0b00000111;
   void homingInterupt();
@@ -97,9 +102,12 @@ void setup() {
   //   shutdown();
   // }
 
-  digitalWrite(ENABLE_PIN1, HIGH); // enable motors
-  digitalWrite(ENABLE_PIN2, HIGH);
-  digitalWrite(ENABLE_PIN3, HIGH);
+  PORTD |= 1<<ENABLE_PIN1;
+  PORTB |= (1<<(ENABLE_PIN2-8) | 1<<(ENABLE_PIN3-8));
+  //slower version
+  // digitalWrite(ENABLE_PIN1, HIGH); // enable motors
+  // digitalWrite(ENABLE_PIN2, HIGH);
+  // digitalWrite(ENABLE_PIN3, HIGH);
 
   Serial.begin(115200);  //To communicate with Simtools
   if (autoHoming) {
@@ -157,7 +165,7 @@ void loop() {
       pulseWidth = current_z_speed;
       monoPulse(STEP_PIN3);
       current_z ++;
-      current_z_speed = speedNormal + speedStart*(1 - constrain(zRamp/(ramp_pulses*1.5), 0, 1));
+      current_z_speed = speedNormal + speedStart*(1 - constrain(zRamp/(ramp_pulses*1), 0, 1));
       zRamp ++;
       if(stepPulses3 > 0)
       {
@@ -187,24 +195,28 @@ void loop() {
  }
 
 void DirectionManager(int Step1, int Step2, int Step3) {
-  if (Step1 < 0) {  //DIR_PIN1 = 3
-    digitalWrite(DIR_PIN1, LOW);
-    // PORTD &= B11110111;        // This code is faster than ;
+  if (Step1 < 0) {
+    PORTD &= ~(1<<DIR_PIN1);
+    //digitalWrite(DIR_PIN1, LOW);
   } else {
-    digitalWrite(DIR_PIN1, HIGH);  //
-                                   // PORTD |= B00001000;
+    PORTD |= 1<<DIR_PIN1;
+    //digitalWrite(DIR_PIN1, HIGH);
   }
 
   if (Step2 < 0) {
-    digitalWrite(DIR_PIN2, LOW);
+    PORTB &= ~(1<<(DIR_PIN2-8));
+    //digitalWrite(DIR_PIN2, LOW);
   } else {
-    digitalWrite(DIR_PIN2, HIGH);
+    PORTB |= 1<<(DIR_PIN2-8);
+    //digitalWrite(DIR_PIN2, HIGH);
   }
 
   if (Step3 < 0) {
-    digitalWrite(DIR_PIN3, LOW);
+    PORTB &= ~(1<<(DIR_PIN3-8));
+    //digitalWrite(DIR_PIN3, LOW);
   } else {
-    digitalWrite(DIR_PIN3, HIGH);
+    PORTB |= 1<<(DIR_PIN3-8);
+    //digitalWrite(DIR_PIN3, HIGH);
   }
 
   if((prevDir1 and stepPulses1 < 0) or (!prevDir1 and stepPulses1 > 0))
@@ -236,10 +248,25 @@ void TargetDelta() {
 }
 
 void monoPulse(int StepPin) {
-  digitalWrite(StepPin, HIGH);
-  delayMicroseconds(pulseWidth);
-  digitalWrite(StepPin, LOW);
-  delayMicroseconds(pulseWidth);
+  if(StepPin<8)
+  {
+    PORTD |= 1<<StepPin;
+    delayMicroseconds(pulseWidth);
+    PORTD &= ~(1<<StepPin);
+    delayMicroseconds(pulseWidth);
+  }
+  else 
+  {
+    PORTB |= 1<<(StepPin-8);
+    delayMicroseconds(pulseWidth);
+    PORTB &= ~(1<<(StepPin-8));
+    delayMicroseconds(pulseWidth);
+  }
+  //slower
+  // digitalWrite(StepPin, HIGH);
+  // delayMicroseconds(pulseWidth);
+  // digitalWrite(StepPin, LOW);
+  // delayMicroseconds(pulseWidth);
 }
 
 void SerialReader() {
@@ -329,7 +356,7 @@ void MoveSteppers(int Step1, int Step2, int Step3)
       pulseWidth = current_z_speed;
       monoPulse(STEP_PIN3);
       current_z ++;
-      current_z_speed = speedNormal + speedStart*(1 - constrain(current_z/(ramp_pulses*1.5), 0, 1));
+      current_z_speed = speedNormal + speedStart*(1 - constrain(current_z/(ramp_pulses*1), 0, 1));
     }
     
   }
@@ -366,7 +393,8 @@ void homing() {
     switch (homingState) {
       case 0:
           if (endstopsState[0] == 1) {
-            digitalWrite(DIR_PIN1, LOW);
+            PORTD &= ~(1<<DIR_PIN1);
+            //digitalWrite(DIR_PIN1, LOW);
             monoPulse(STEP_PIN1);
           } else {
             motor1Position = 0;
@@ -375,7 +403,8 @@ void homing() {
           break;
       case 1:
           if (endstopsState[1] == 1) {
-            digitalWrite(DIR_PIN1, HIGH);
+            PORTD |= 1<<DIR_PIN1;
+            //digitalWrite(DIR_PIN1, HIGH);
             monoPulse(STEP_PIN1);
             motor1Position++;
           } else {
@@ -386,15 +415,18 @@ void homing() {
             homingState++;
             pulseWidth = speedHoming;
             delay(100);
-            digitalWrite(ENABLE_PIN1, LOW);
+            PORTD &= ~(1<<ENABLE_PIN1);
+            //digitalWrite(ENABLE_PIN1, LOW);
             delay(10);
-            digitalWrite(ENABLE_PIN1, HIGH);
+            PORTD |= 1<<ENABLE_PIN1;
+            //digitalWrite(ENABLE_PIN1, HIGH);
             delay(1000);
           }
           break;
       case 2:
           if (endstopsState[2] == 1) {
-            digitalWrite(DIR_PIN2, LOW);
+            PORTB &= ~(1<<(DIR_PIN2-8));
+            //digitalWrite(DIR_PIN2, LOW);
             monoPulse(STEP_PIN2);
           } else {
             motor2Position = 0;
@@ -403,7 +435,8 @@ void homing() {
           break;
       case 3:
           if (endstopsState[3] == 1) {
-            digitalWrite(DIR_PIN2, HIGH);
+            PORTB |= 1<<(DIR_PIN2-8);
+            //digitalWrite(DIR_PIN2, HIGH);
             monoPulse(STEP_PIN2);
             motor2Position++;
           } else {
@@ -414,15 +447,18 @@ void homing() {
             homingState++;
             pulseWidth = speedHoming;
             delay(100);
-            digitalWrite(ENABLE_PIN2, LOW);
+            PORTB &= ~(1<<(ENABLE_PIN2-8));
+            //digitalWrite(ENABLE_PIN2, LOW);
             delay(10);
-            digitalWrite(ENABLE_PIN2, HIGH);
+            PORTB |= 1<<(ENABLE_PIN2-8);
+            //digitalWrite(ENABLE_PIN2, HIGH);
             delay(1000);
           }
           break;
       case 4:
           if (endstopsState[4] == 1) {
-            digitalWrite(DIR_PIN3, LOW);
+            PORTB &= ~(1<<(DIR_PIN3-8));
+            //digitalWrite(DIR_PIN3, LOW);
             monoPulse(STEP_PIN3);
           } else {
             motor3Position = 0;
@@ -431,7 +467,8 @@ void homing() {
           break;
       case 5:
           if (endstopsState[5] == 1) {
-            digitalWrite(DIR_PIN3, HIGH);
+            PORTB |= 1<<(DIR_PIN3-8);
+            //digitalWrite(DIR_PIN3, HIGH);
             monoPulse(STEP_PIN3);
             motor3Position++;
           } else {
@@ -441,9 +478,11 @@ void homing() {
             MoveSteppers(0, 0, stepPulses3);
             homingState++;
             delay(100);
-            digitalWrite(ENABLE_PIN3, LOW);
+            PORTB &= ~(1<<(ENABLE_PIN3-8));
+            //digitalWrite(ENABLE_PIN3, LOW);
             delay(10);
-            digitalWrite(ENABLE_PIN3, HIGH);
+            PORTB |= 1<<(ENABLE_PIN3-8);
+            //digitalWrite(ENABLE_PIN3, HIGH);
             delay(1000);
           }
           break;
@@ -458,8 +497,10 @@ void shutdown() {
     if(digitalRead(SHUTDOWN_INTERUPT_PIN) == 0)
     {
       inShutdown = true;
-      digitalWrite(ENABLE_PIN1, LOW);
-      digitalWrite(ENABLE_PIN2, LOW);
-      digitalWrite(ENABLE_PIN3, LOW);
+      PORTD &= ~(1<<ENABLE_PIN1);
+      PORTB &= ~(1<<(ENABLE_PIN2-8) | 1<<(ENABLE_PIN3-8));
+      // digitalWrite(ENABLE_PIN1, LOW);
+      // digitalWrite(ENABLE_PIN2, LOW);
+      // digitalWrite(ENABLE_PIN3, LOW);
     }
 }
