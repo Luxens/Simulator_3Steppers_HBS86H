@@ -42,11 +42,11 @@ uint16_t motor1Target = stepperMid, motor2Target = stepperMid, motor3Target = st
 uint16_t motor1Position = stepperMid, motor2Position = stepperMid, motor3Position = stepperMid;  // The actual positions
 uint16_t motor1Max = stepperMax, motor2Max = stepperMax, motor3Max = stepperMax;
 
-const uint8_t speedNormal = 20;    //us for steps delay //15
+const uint8_t speedNormal = 10;    //us for steps delay 10 minimum //15
 const uint8_t speedHoming = 100;   //us for steps delay
 const uint8_t speedShutdown = 50;  //us for steps delay
-const uint8_t speedStart = 75; //55
-const uint8_t ramp_pulses = uint8_t (0.15*stepperPulses); //0.1
+const uint8_t speedStart = 55; //55
+const uint8_t ramp_pulses = uint8_t (0.1*stepperPulses); //0.1
 uint8_t pulseWidth = speedNormal;     //From the HBS86h datasheet : For reliable response, pulse width should be longer than 10μs
 uint8_t current_x_speed = speedStart;
 uint8_t current_y_speed = speedStart;
@@ -75,7 +75,8 @@ void setup() {
   pinMode(STEP_PIN3, OUTPUT);
   pinMode(DIR_PIN3, OUTPUT);
   pinMode(ENABLE_PIN3, OUTPUT);
-
+  DDRC &= ~0b00000111;
+  PORTC |= 0b00000111;
   void homingInterupt();
   void shutdown();
   endstops.begin(0x20);
@@ -118,7 +119,7 @@ void loop() {
   DirectionManager(stepPulses1, stepPulses2, stepPulses3);  //put the motors in the right directions
   while(!Serial.available())
   {
-    if(current_x < x)
+    if(current_x < x && !((PINC & (1<<PC0))>>PC0))
     {
       pulseWidth = current_x_speed;
       monoPulse(STEP_PIN1);
@@ -135,7 +136,7 @@ void loop() {
       }
     }
     
-    if(current_y < y)
+    if(current_y < y && !((PINC & (1<<PC1))>>PC1))
     {
       pulseWidth = current_y_speed;
       monoPulse(STEP_PIN2);
@@ -151,7 +152,7 @@ void loop() {
         motor2Position --;
       }
     }
-    if(current_z < z)
+    if(current_z < z && !((PINC & (1<<PC2))>>PC2))
     {
       pulseWidth = current_z_speed;
       monoPulse(STEP_PIN3);
