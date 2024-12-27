@@ -36,22 +36,23 @@ int stepPulses1 = 0, stepPulses2 = 0, stepPulses3 = 0;
 // unsigned int motor1Position = 8191, motor2Position = 8191, motor3Position = 8191;  // The actual positions
 // unsigned int motor1Max = 16384, motor2Max = 16384, motor3Max = 16384;
 //15 bit
-const uint16_t stepperPulses = 32768;
+const uint16_t stepperPulses = 4096;
+const uint16_t SimToolsPulses = 65535;
 const uint16_t stepperMax = stepperPulses-1;
 const uint16_t stepperMid = stepperPulses/2 -1;
 uint16_t motor1Target = stepperMid, motor2Target = stepperMid, motor3Target = stepperMid;        // Motors position we want to reach
 uint16_t motor1Position = stepperMid, motor2Position = stepperMid, motor3Position = stepperMid;  // The actual positions
 uint16_t motor1Max = stepperMax, motor2Max = stepperMax, motor3Max = stepperMax;
 
-const uint8_t speedNormal = 10;    //us for steps delay 10 minimum //15
-const uint8_t speedHoming = 100;   //us for steps delay
-const uint8_t speedShutdown = 50;  //us for steps delay
-const uint8_t speedStart = 55; //55
-const uint8_t ramp_pulses = uint8_t (0.1*stepperPulses); //0.1
-uint8_t pulseWidth = speedNormal;     //From the HBS86h datasheet : For reliable response, pulse width should be longer than 10μs
-uint8_t current_x_speed = speedStart;
-uint8_t current_y_speed = speedStart;
-uint8_t current_z_speed = speedStart;
+const uint16_t speedNormal = 150;    //us for steps delay 10 minimum //15
+const uint16_t speedHoming = 500;   //us for steps delay
+const uint16_t speedShutdown = 500;  //us for steps delay
+const uint16_t speedStart = 300; //55
+const uint16_t ramp_pulses = uint16_t (0.05*stepperPulses); //0.1
+uint16_t pulseWidth = speedNormal;     //From the HBS86h datasheet : For reliable response, pulse width should be longer than 10μs
+uint16_t current_x_speed = speedStart;
+uint16_t current_y_speed = speedStart;
+uint16_t current_z_speed = speedStart;
 uint16_t current_x = 0;
 uint16_t current_y = 0;
 uint16_t current_z = 0;
@@ -67,21 +68,10 @@ uint8_t homingState = 0;
  
 void setup() {
   delay(2000);  //safety delay to flash the code
-  DDRD |=0b11110000;
-  DDRB |=0b00011111;
-  //slower port manipulation
-  // pinMode(STEP_PIN1, OUTPUT);
-  // pinMode(DIR_PIN1, OUTPUT);
-  // pinMode(ENABLE_PIN1, OUTPUT);
-  // pinMode(STEP_PIN2, OUTPUT);
-  // pinMode(DIR_PIN2, OUTPUT);
-  // pinMode(ENABLE_PIN2, OUTPUT);
-  // pinMode(STEP_PIN3, OUTPUT);
-  // pinMode(DIR_PIN3, OUTPUT);
-  // pinMode(ENABLE_PIN3, OUTPUT);
-  //C port manipulation
-  DDRC &= ~0b00000111;
-  PORTC |= 0b00000111;
+  DDRD |=0b11110000; //set outputs/inputs
+  DDRB |=0b00011111; //set default state
+  DDRC &= ~0b00000111; //set outputs/inputs
+  PORTC |= 0b00000111; //set default state
   void homingInterupt();
   void shutdown();
   endstops.begin(0x20);
@@ -104,10 +94,6 @@ void setup() {
 
   PORTD |= 1<<ENABLE_PIN1;
   PORTB |= (1<<(ENABLE_PIN2-8) | 1<<(ENABLE_PIN3-8));
-  //slower version
-  // digitalWrite(ENABLE_PIN1, HIGH); // enable motors
-  // digitalWrite(ENABLE_PIN2, HIGH);
-  // digitalWrite(ENABLE_PIN3, HIGH);
 
   Serial.begin(115200);  //To communicate with Simtools
   if (autoHoming) {
@@ -116,7 +102,10 @@ void setup() {
 }
 
 void loop() {
-  SerialReader();  //Get the datas from Simtools
+  if(Serial.available())
+  {
+    SerialReader();  //Get the datas from Simtools
+  }
   TargetDelta();                                      //Convert the position targets to pulse number
   x = abs(stepPulses1);
   y = abs(stepPulses2);
@@ -127,7 +116,7 @@ void loop() {
   DirectionManager(stepPulses1, stepPulses2, stepPulses3);  //put the motors in the right directions
   while(!Serial.available())
   {
-    if(current_x < x && !((PINC & (1<<PC0))>>PC0))
+    if(current_x < x)
     {
       pulseWidth = current_x_speed;
       monoPulse(STEP_PIN1);
@@ -144,7 +133,7 @@ void loop() {
       }
     }
     
-    if(current_y < y && !((PINC & (1<<PC1))>>PC1))
+    if(current_y < y)
     {
       pulseWidth = current_y_speed;
       monoPulse(STEP_PIN2);
@@ -160,12 +149,12 @@ void loop() {
         motor2Position --;
       }
     }
-    if(current_z < z && !((PINC & (1<<PC2))>>PC2))
+    if(current_z < z)
     {
       pulseWidth = current_z_speed;
       monoPulse(STEP_PIN3);
       current_z ++;
-      current_z_speed = speedNormal + speedStart*(1 - constrain(zRamp/(ramp_pulses*1), 0, 1));
+      current_z_speed = speedNormal + speedStart*(1 - constrain(zRamp/(ramp_pulses*2), 0, 1));
       zRamp ++;
       if(stepPulses3 > 0)
       {
@@ -197,47 +186,41 @@ void loop() {
 void DirectionManager(int Step1, int Step2, int Step3) {
   if (Step1 < 0) {
     PORTD &= ~(1<<DIR_PIN1);
-    //digitalWrite(DIR_PIN1, LOW);
   } else {
     PORTD |= 1<<DIR_PIN1;
-    //digitalWrite(DIR_PIN1, HIGH);
   }
 
   if (Step2 < 0) {
     PORTB &= ~(1<<(DIR_PIN2-8));
-    //digitalWrite(DIR_PIN2, LOW);
   } else {
     PORTB |= 1<<(DIR_PIN2-8);
-    //digitalWrite(DIR_PIN2, HIGH);
   }
 
   if (Step3 < 0) {
     PORTB &= ~(1<<(DIR_PIN3-8));
-    //digitalWrite(DIR_PIN3, LOW);
   } else {
     PORTB |= 1<<(DIR_PIN3-8);
-    //digitalWrite(DIR_PIN3, HIGH);
   }
 
-  if((prevDir1 and stepPulses1 < 0) or (!prevDir1 and stepPulses1 > 0))
+  if((prevDir1 && (stepPulses1 < 0)) || (!prevDir1 && (stepPulses1 > 0)))
   {
     current_x_speed = speedNormal + speedStart;
     prevDir1 = !prevDir1;
     xRamp = 0;
   }
-  if((prevDir2 and stepPulses2 < 0) or (!prevDir2 and stepPulses2 > 0))
+  if((prevDir2 && (stepPulses2 < 0)) || (!prevDir2 && (stepPulses2 > 0)))
   {
     current_y_speed = speedNormal + speedStart;
     prevDir2 = !prevDir2;
     yRamp = 0;
   }
-  if((prevDir3 and stepPulses3 < 0) or (!prevDir3 and stepPulses3 > 0))
+  if((prevDir3 && (stepPulses3 < 0)) || (!prevDir3 and (stepPulses3 > 0)))
   {
     current_z_speed = speedNormal + speedStart;
     prevDir3 = !prevDir3;
     zRamp = 0;
   }
-  delayMicroseconds(5);
+  //delayMicroseconds(5);
 }
 
 void TargetDelta() {
@@ -262,11 +245,6 @@ void monoPulse(int StepPin) {
     PORTB &= ~(1<<(StepPin-8));
     delayMicroseconds(pulseWidth);
   }
-  //slower
-  // digitalWrite(StepPin, HIGH);
-  // delayMicroseconds(pulseWidth);
-  // digitalWrite(StepPin, LOW);
-  // delayMicroseconds(pulseWidth);
 }
 
 void SerialReader() {
@@ -280,16 +258,38 @@ void SerialReader() {
         motor1Target = (axis1[0] << 8) | axis1[1];
         motor2Target = (axis2[0] << 8) | axis2[1];
         motor3Target = (axis3[0] << 8) | axis3[1];
-        motor1Target = constrain(motor1Target, 0, 65535);
-        motor2Target = constrain(motor2Target, 0, 65535);
-        motor3Target = constrain(motor3Target, 0, 65535);
-        motor1Target = map(motor1Target, 0, 65535, 0, motor1Max);
-        motor2Target = map(motor2Target, 0, 65535, 0, motor2Max);
-        motor3Target = map(motor3Target, 0, 65535, 0, motor3Max);
+        motor1Target = constrain(motor1Target, 0, SimToolsPulses);
+        motor2Target = constrain(motor2Target, 0, SimToolsPulses);
+        motor3Target = constrain(motor3Target, 0, SimToolsPulses);
+        motor1Target = map(motor1Target, 0, SimToolsPulses, 0, motor1Max);
+        motor2Target = map(motor2Target, 0, SimToolsPulses, 0, motor2Max);
+        motor3Target = map(motor3Target, 0, SimToolsPulses, 0, motor3Max);
       }
     }
   }
 }
+
+// void SerialReader() {
+//   while(Serial.available() > 0) {
+//     if (findString(startMarker, startMarkerLength)) { // Find START marker
+//       Serial.readBytes(axis1, dataLength);
+//       Serial.readBytes(axis2, dataLength);
+//       Serial.readBytes(axis3, dataLength);
+//       if (findString(stopMarker, stopMarkerLength)) {
+//         // Decode data
+//         motor1Target = (axis1[0] << 8) | axis1[1];
+//         motor2Target = (axis2[0] << 8) | axis2[1];
+//         motor3Target = (axis3[0] << 8) | axis3[1];
+//         motor1Target = constrain(motor1Target, 0, SimToolsPulses);
+//         motor2Target = constrain(motor2Target, 0, SimToolsPulses);
+//         motor3Target = constrain(motor3Target, 0, SimToolsPulses);
+//         motor1Target = map(motor1Target, 0, SimToolsPulses, 0, motor1Max);
+//         motor2Target = map(motor2Target, 0, SimToolsPulses, 0, motor2Max);
+//         motor3Target = map(motor3Target, 0, SimToolsPulses, 0, motor3Max);
+//       }
+//     }
+//   }
+// }
 
 bool findString(const char *target, int length) {
   int index = 0;
@@ -341,7 +341,7 @@ void MoveSteppers(int Step1, int Step2, int Step3)
       pulseWidth = current_x_speed;
       monoPulse(STEP_PIN1);
       current_x ++;
-      current_x_speed = speedNormal + speedStart*(1 - constrain(current_x/ramp_pulses, 0, 1));
+      current_x_speed = speedHoming + speedStart*(1 - constrain(current_x/ramp_pulses, 0, 1));
     }
     
     if(current_y < y)
@@ -349,14 +349,14 @@ void MoveSteppers(int Step1, int Step2, int Step3)
       pulseWidth = current_y_speed;
       monoPulse(STEP_PIN2);
       current_y ++;
-      current_y_speed = speedNormal + speedStart*(1 - constrain(current_y/ramp_pulses, 0, 1));
+      current_y_speed = speedHoming + speedStart*(1 - constrain(current_y/ramp_pulses, 0, 1));
     }
     if(current_z < z)
     {
       pulseWidth = current_z_speed;
       monoPulse(STEP_PIN3);
       current_z ++;
-      current_z_speed = speedNormal + speedStart*(1 - constrain(current_z/(ramp_pulses*1), 0, 1));
+      current_z_speed = speedHoming + speedStart*(1 - constrain(current_z/(ramp_pulses*1), 0, 1));
     }
     
   }
@@ -394,7 +394,6 @@ void homing() {
       case 0:
           if (endstopsState[0] == 1) {
             PORTD &= ~(1<<DIR_PIN1);
-            //digitalWrite(DIR_PIN1, LOW);
             monoPulse(STEP_PIN1);
           } else {
             motor1Position = 0;
@@ -404,7 +403,6 @@ void homing() {
       case 1:
           if (endstopsState[1] == 1) {
             PORTD |= 1<<DIR_PIN1;
-            //digitalWrite(DIR_PIN1, HIGH);
             monoPulse(STEP_PIN1);
             motor1Position++;
           } else {
@@ -414,19 +412,16 @@ void homing() {
             MoveSteppers(stepPulses1, 0, 0);
             homingState++;
             pulseWidth = speedHoming;
-            delay(100);
+            delay(30);
             PORTD &= ~(1<<ENABLE_PIN1);
-            //digitalWrite(ENABLE_PIN1, LOW);
-            delay(10);
+            delay(3);
             PORTD |= 1<<ENABLE_PIN1;
-            //digitalWrite(ENABLE_PIN1, HIGH);
-            delay(1000);
+            delay(300);
           }
           break;
       case 2:
           if (endstopsState[2] == 1) {
             PORTB &= ~(1<<(DIR_PIN2-8));
-            //digitalWrite(DIR_PIN2, LOW);
             monoPulse(STEP_PIN2);
           } else {
             motor2Position = 0;
@@ -436,7 +431,6 @@ void homing() {
       case 3:
           if (endstopsState[3] == 1) {
             PORTB |= 1<<(DIR_PIN2-8);
-            //digitalWrite(DIR_PIN2, HIGH);
             monoPulse(STEP_PIN2);
             motor2Position++;
           } else {
@@ -446,19 +440,16 @@ void homing() {
             MoveSteppers(0, stepPulses2, 0);
             homingState++;
             pulseWidth = speedHoming;
-            delay(100);
+            delay(30);
             PORTB &= ~(1<<(ENABLE_PIN2-8));
-            //digitalWrite(ENABLE_PIN2, LOW);
-            delay(10);
+            delay(3);
             PORTB |= 1<<(ENABLE_PIN2-8);
-            //digitalWrite(ENABLE_PIN2, HIGH);
-            delay(1000);
+            delay(300);
           }
           break;
       case 4:
           if (endstopsState[4] == 1) {
             PORTB &= ~(1<<(DIR_PIN3-8));
-            //digitalWrite(DIR_PIN3, LOW);
             monoPulse(STEP_PIN3);
           } else {
             motor3Position = 0;
@@ -468,7 +459,6 @@ void homing() {
       case 5:
           if (endstopsState[5] == 1) {
             PORTB |= 1<<(DIR_PIN3-8);
-            //digitalWrite(DIR_PIN3, HIGH);
             monoPulse(STEP_PIN3);
             motor3Position++;
           } else {
@@ -477,13 +467,11 @@ void homing() {
             TargetDelta();
             MoveSteppers(0, 0, stepPulses3);
             homingState++;
-            delay(100);
+            delay(30);
             PORTB &= ~(1<<(ENABLE_PIN3-8));
-            //digitalWrite(ENABLE_PIN3, LOW);
-            delay(10);
+            delay(3);
             PORTB |= 1<<(ENABLE_PIN3-8);
-            //digitalWrite(ENABLE_PIN3, HIGH);
-            delay(1000);
+            delay(300);
           }
           break;
     }
@@ -499,8 +487,5 @@ void shutdown() {
       inShutdown = true;
       PORTD &= ~(1<<ENABLE_PIN1);
       PORTB &= ~(1<<(ENABLE_PIN2-8) | 1<<(ENABLE_PIN3-8));
-      // digitalWrite(ENABLE_PIN1, LOW);
-      // digitalWrite(ENABLE_PIN2, LOW);
-      // digitalWrite(ENABLE_PIN3, LOW);
     }
 }
