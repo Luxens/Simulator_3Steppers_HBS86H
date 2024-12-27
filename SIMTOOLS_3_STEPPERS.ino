@@ -42,11 +42,11 @@ uint16_t motor1Target = stepperMid, motor2Target = stepperMid, motor3Target = st
 uint16_t motor1Position = stepperMid, motor2Position = stepperMid, motor3Position = stepperMid;  // The actual positions
 uint16_t motor1Max = stepperMax, motor2Max = stepperMax, motor3Max = stepperMax;
 
-const uint8_t speedNormal = 15;    //us for steps delay
+const uint8_t speedNormal = 20;    //us for steps delay //15
 const uint8_t speedHoming = 100;   //us for steps delay
 const uint8_t speedShutdown = 50;  //us for steps delay
-const uint8_t speedStart = 55;
-const uint8_t ramp_pulses = uint8_t (0.10*stepperPulses);
+const uint8_t speedStart = 75; //55
+const uint8_t ramp_pulses = uint8_t (0.15*stepperPulses); //0.1
 uint8_t pulseWidth = speedNormal;     //From the HBS86h datasheet : For reliable response, pulse width should be longer than 10μs
 uint8_t current_x_speed = speedStart;
 uint8_t current_y_speed = speedStart;
